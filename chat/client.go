@@ -5,6 +5,7 @@ package chat
 
 import (
 	"bytes"
+	"github.com/yusys-cloud/go-jsonstore-rest/rest"
 	"log"
 	"net/http"
 	"time"
@@ -70,7 +71,7 @@ func (c *Client) readPump() {
 		}
 		message = bytes.TrimSpace(bytes.Replace(message, newline, space, -1))
 		//c.hub.broadcast <- message
-		messageNew := time.Now().Format("2006-01-02 15:04:05")+" "+string(message)
+		messageNew := time.Now().Format("2006-01-02 15:04:05") + " " + string(message)
 		c.hub.broadcast <- []byte(messageNew)
 	}
 }
@@ -121,6 +122,19 @@ func (c *Client) writePump() {
 	}
 }
 
+func (c *Client) readHistory() {
+	s := rest.Search{}
+	s.B = "chat"
+	s.K = "msg"
+	s.Size = 30
+	s.ShortBy = "k,asc"
+	resp := c.hub.db.Search(s)
+	list := resp.Data.Items.([]interface{})
+	for _, v := range list {
+		c.send <- []byte(v.(map[string]interface{})["v"].(string))
+	}
+}
+
 // serveWs handles websocket requests from the peer.
 func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
@@ -135,4 +149,5 @@ func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	// new goroutines.
 	go client.writePump()
 	go client.readPump()
+	go client.readHistory()
 }
